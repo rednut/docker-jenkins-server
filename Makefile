@@ -11,9 +11,33 @@ $(info SSL_DOMAIN: $(SSL_DOMAIN))
 $(info SSL_FILENAME: $(SSL_FILENAME))
 
 
-all: clean selfsignedcert
+LOCAL_VOLUME ?= $(PWD)/data/
+VOLUME_PATH ?= /var/jenkins_home
+
+IMAGE_NAME ?= jenkins
+IMAGE_TAG ?= latest
+
+CONTAINER_NAME ?= jenkins
+
+DOCKER_IP ?= $(shell boot2docker ip)
 
 
+all: selfsignedcert dockerrun
+
+
+dockerpull:
+	docker pull $(IMAGE_NAME):$(IMAGE_TAG)
+
+dockerrun: dockerbuild
+	mkdir -p $(LOCAL_VOLUME)
+	docker stop $(CONTAINER_NAME) || echo "Not stoppable yet"
+	docker rm $(CONTAINER_NAME) || echo "Not removable yet"
+	docker run -p 50000:50000 -p 8080:8080 -p 8083:8083 -v $(LOCAL_VOLUME):$(VOLUME_PATH) --name $(CONTAINER_NAME) -d $(IMAGE_NAME):$(IMAGE_TAG)
+	docker ps | grep $(CONTAINER_NAME)
+	@echo "jenkins now running on $(DOCKER_IP):8043"	
+
+dockerbuild:
+	docker build -t $(CONTAINER_NAME) . 
 
 clean:
 	rm -fv $(SSL_FILENAME).key $(SSL_FILENAME).crt
@@ -21,6 +45,7 @@ clean:
 
 
 selfsignedcert:
+	@test -f "$(SSL_FILENAME).key" || \
 	openssl req \
           -new \
           -newkey rsa:$(SSL_KEY_SIZE) \
@@ -29,7 +54,7 @@ selfsignedcert:
           -x509 \
           -subj "/C=US/ST=Denial/L=Springfield/O=Dis/CN=$(SSL_DOMAIN)" \
           -keyout "$(SSL_FILENAME).key" \
-          -out "$(SSL_FILENAME).crt"
+          -out "$(SSL_FILENAME).pem"
 
 
 
